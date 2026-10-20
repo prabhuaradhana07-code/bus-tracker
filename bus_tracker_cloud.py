@@ -55,16 +55,18 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "YAHAN_BOT_TOKEN_DALO"
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID",   "YAHAN_CHAT_ID_DALO")
 
 # RBI pe kitne minute pehle alert chahiye
-RBI_ALERT_AT_MINUTES = [5, 4, 3, 2, 1]
+RBI_ALERT_AT_MINUTES        = [5, 4, 3, 2, 1]
+WALKESHWAR_ALERT_AT_MINUTES = [5, 3, 1]
 
 # =================================================================
 #  INTERNAL CONFIG
 # =================================================================
 
-BASE_API    = "https://chalo.com/app/api/vasudha/track/route-live-info/mumbai"
-LOG_FILE    = "bus_history_log.txt"
-CHECK_SEC   = 30
-RBI_STOP_ID = "UnxXKjiv"
+BASE_API          = "https://chalo.com/app/api/vasudha/track/route-live-info/mumbai"
+LOG_FILE          = "bus_history_log.txt"
+CHECK_SEC         = 30   # 15 ya 20 kar sakte ho faster checks ke liye
+RBI_STOP_ID       = "UnxXKjiv"
+WALKESHWAR_STOP_ID = "wkXXAyRN"
 
 HEADERS = {
     "accept":             "application/json",
@@ -252,11 +254,12 @@ def process(route_key: str, data: dict):
 
         if uid not in bus_state:
             bus_state[uid] = {
-                "vNo":             vNo,
-                "rbi_telegram":    set(),
-                "prev_eta":        {},
-                "timestamps":      {},
-                "departed_origin": False,
+                "vNo":                  vNo,
+                "rbi_telegram":         set(),
+                "walkeshwar_telegram":  set(),
+                "prev_eta":             {},
+                "timestamps":           {},
+                "departed_origin":      False,
             }
 
         st        = bus_state[uid]
@@ -301,7 +304,7 @@ def process(route_key: str, data: dict):
                     log(f"ETA | {cfg['name']} | Bus {vNo} | "
                         f"{sname} | {eta_min}min | {dist}m")
 
-                # Telegram alerts - ONLY for RBI stop
+                # Telegram alerts - RBI stop
                 if sid == RBI_STOP_ID and not _first_cycle[route_key]:
                     for m in RBI_ALERT_AT_MINUTES:
                         if m in st["rbi_telegram"]:
@@ -337,6 +340,41 @@ def process(route_key: str, data: dict):
                             for m2 in RBI_ALERT_AT_MINUTES:
                                 if m2 >= m:
                                     st["rbi_telegram"].add(m2)
+                            break
+
+                # Telegram alerts - Walkeshwar stop
+                if sid == WALKESHWAR_STOP_ID and not _first_cycle[route_key]:
+                    for m in WALKESHWAR_ALERT_AT_MINUTES:
+                        if m in st["walkeshwar_telegram"]:
+                            continue
+                        if eta_min <= m:
+                            if m <= 1:
+                                urgency = "ABHI PAHUCHNE WALI HAI!"
+                                emoji   = "URGENT"
+                            elif m <= 3:
+                                urgency = "Bas thodi der mein!"
+                                emoji   = "SOON"
+                            else:
+                                urgency = "Bus aa rahi hai"
+                                emoji   = "INFO"
+
+                            tg_msg = (
+                                f"[{emoji}] A-108 Walkeshwar Alert!\n"
+                                f"\n"
+                                f"Bus: <b>{vNo}</b>\n"
+                                f"Stop: <b>Walkeshwar</b>\n"
+                                f"ETA: <b>{eta_min} min</b> ({dist}m door)\n"
+                                f"Route: {cfg['name']}\n"
+                                f"Time: {ts_short}\n"
+                                f"\n"
+                                f"<b>{urgency}</b>"
+                            )
+                            ok = send_telegram(tg_msg)
+                            log(f"TELEGRAM {'OK' if ok else 'FAIL'} | "
+                                f"Bus {vNo} | Walkeshwar | {m}min alert")
+                            for m2 in WALKESHWAR_ALERT_AT_MINUTES:
+                                if m2 >= m:
+                                    st["walkeshwar_telegram"].add(m2)
                             break
 
                 st["prev_eta"][sid] = eta_sec
