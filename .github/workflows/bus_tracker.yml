@@ -1,0 +1,35 @@
+name: A-108 Bus Tracker
+
+on:
+  schedule:
+    # Morning session  : 9:00 AM IST  = 03:30 UTC
+    - cron: '30 3 * * *'
+    # Evening session  : 4:00 PM IST  = 10:30 UTC
+    - cron: '30 10 * * *'
+
+  # Manual trigger (testing ke liye)
+  workflow_dispatch:
+
+jobs:
+  bus-track:
+    runs-on: ubuntu-latest
+    # Morning = 5 hours, Evening = 2 hours → max 330 min safety limit
+    timeout-minutes: 330
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run A-108 Bus Tracker
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python bus_tracker_cloud.py
