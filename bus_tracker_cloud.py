@@ -69,20 +69,17 @@ RBI_STOP_ID       = "UnxXKjiv"
 WALKESHWAR_STOP_ID = "wkXXAyRN"
 
 HEADERS = {
-    "accept":             "application/json",
-    "accept-language":    "en-US,en;q=0.9,hi;q=0.8",
-    "dnt":                "1",
-    "source":             "1",
+    "accept":             "application/json, text/plain, */*",
+    "accept-language":    "en-US,en;q=0.9",
+    "priority":           "u=1, i",
+    "sec-ch-ua":          '"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"',
+    "sec-ch-ua-mobile":   "?0",
+    "sec-ch-ua-platform": '"Windows"',
     "sec-fetch-dest":     "empty",
     "sec-fetch-mode":     "cors",
     "sec-fetch-site":     "same-origin",
-    "user-agent":         ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/148.0.0.0 Safari/537.36"),
-    "sec-ch-ua":          '"Chromium";v="148", "Google Chrome";v="148", '
-                          '"Not/A)Brand";v="99"',
-    "sec-ch-ua-mobile":   "?0",
-    "sec-ch-ua-platform": '"Windows"',
+    "source":             "1",
+    "user-agent":         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
 }
 
 ORIGIN   = "origin"
@@ -197,14 +194,23 @@ def build_url(cfg: dict) -> str:
     return f"{BASE_API}/{cfg['route_id']}?stopIds={ids}"
 
 
+_session = requests.Session()
+
 def fetch(route_key: str):
+    global _session
     cfg  = ROUTES[route_key]
     hdrs = {**HEADERS, "referer": cfg["referer"]}
     try:
-        r = requests.get(build_url(cfg), headers=hdrs, timeout=15)
+        r = _session.get(build_url(cfg), headers=hdrs, timeout=15)
         if r.status_code == 200:
             return r.json()
-        log(f"API HTTP {r.status_code} for {route_key}")
+        log(f"API HTTP {r.status_code} for {route_key} | {r.text[:120]}")
+        # Agar 403 aaye toh session refresh karo homepage visit karke
+        if r.status_code == 403:
+            try:
+                _session.get("https://chalo.com/app/live-tracking", headers=HEADERS, timeout=10)
+            except Exception:
+                pass
     except requests.exceptions.Timeout:
         log(f"Timeout - {route_key} - will retry")
     except Exception as e:
