@@ -14,13 +14,19 @@ Setup:
   python bus_tracker_cloud.py
 """
 
-import requests
 import time
 import json
 import sys
 import os
 from datetime import datetime
 import pytz
+import requests
+
+try:
+    from curl_cffi import requests as cffi_requests
+    USE_CFFI = True
+except ImportError:
+    USE_CFFI = False
 
 # =================================================================
 #  OPERATING HOURS (IST)
@@ -194,25 +200,26 @@ def build_url(cfg: dict) -> str:
     return f"{BASE_API}/{cfg['route_id']}?stopIds={ids}"
 
 
-_session = requests.Session()
+_session = None
+
+def get_session():
+    global _session
+    if _session is None:
+        if USE_CFFI:
+            _session = cffi_requests.Session(impersonate="chrome124")
+        else:
+            _session = requests.Session()
+    return _session
 
 def fetch(route_key: str):
-    global _session
+    s = get_session()
     cfg  = ROUTES[route_key]
     hdrs = {**HEADERS, "referer": cfg["referer"]}
     try:
-        r = _session.get(build_url(cfg), headers=hdrs, timeout=15)
+        r = s.get(build_url(cfg), headers=hdrs, timeout=15)
         if r.status_code == 200:
             return r.json()
         log(f"API HTTP {r.status_code} for {route_key} | {r.text[:120]}")
-        # Agar 403 aaye toh session refresh karo homepage visit karke
-        if r.status_code == 403:
-            try:
-                _session.get("https://chalo.com/app/live-tracking", headers=HEADERS, timeout=10)
-            except Exception:
-                pass
-    except requests.exceptions.Timeout:
-        log(f"Timeout - {route_key} - will retry")
     except Exception as e:
         log(f"Fetch error - {route_key} - {e}")
     return None
